@@ -1,3 +1,7 @@
+if(process.env.NODE_ENV!="production"){
+
+    require('dotenv').config();
+}
 const express = require("express");
 const app = express();
 const mongoose = require("mongoose");
@@ -6,15 +10,26 @@ const methodOverride = require("method-override");
 const ejsMate = require("ejs-mate");
 const ExpressError=require("./Utils/ExpressError.js");
 const session=require("express-session");
+const MongoStore=require("connect-mongo");
 const flash=require("connect-flash");
 const passport=require("passport");
 const LocalStrategy=require("passport-local");
 const User=require("./models/user.js");
-
-
 const listings=require("./routes/listing.js");
 const reviews=require("./routes/review.js");
 const user=require("./routes/user.js");
+
+//mongodb connection
+// let MONGO_URL = "mongodb+srv://neerajsemil7:CDaIzIAvYPvU0u39@cluster0.udrnxjt.mongodb.net/wanderlust?retryWrites=true&w=majority&appName=Cluster0";
+const dbUrl=process.env.ATLAS_CONNECTION;
+main().then(() => {
+    console.log("db connected");
+}).catch((err) => {
+    console.log(err);
+})
+async function main() {
+    await mongoose.connect(dbUrl);
+}
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
@@ -23,8 +38,23 @@ app.use(methodOverride("_method"));
 app.engine('ejs', ejsMate);
 app.use(express.static(path.join(__dirname, "/public")));
 
+
+
+const store=MongoStore.create({
+    mongoUrl:dbUrl,
+    crypto:{
+        secret:process.env.SECRET
+    },
+    touchAfter:24*3600,
+})
+
+store.on("error",()=>{
+    console.log("error in mongo session store",err);
+})
+
 const sessionOptions={
-    secret:"mysupersecretcode",
+    store,
+    secret:process.env.SECRET,
     resave: false,
     saveUninitialized: true,
     cookie:{
@@ -38,6 +68,7 @@ const sessionOptions={
 //     res.send("i am root");
 // })
 
+
 app.use(session(sessionOptions));
 app.use(flash());
 
@@ -50,16 +81,7 @@ passport.serializeUser(User.serializeUser());
 passport.deserializeUser(User.deserializeUser());
 
 
-//mongodb connection
-let MONGO_URL = "mongodb://127.0.0.1:27017/wanderlust";
-main().then(() => {
-    console.log("db connected");
-}).catch((err) => {
-    console.log(err);
-})
-async function main() {
-    await mongoose.connect(MONGO_URL);
-}
+
 
 // flash middleware 
 app.use((req,res,next)=>{
